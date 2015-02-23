@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <script src="../javascript/react/react-with-addons.js"></script>
+    <script src="../javascript/react/JSXTransformer.js"></script>
+    <script src="http://code.jquery.com/jquery-1.10.0.min.js"></script>
+  </head>
+  <body>
+    <div id="example"></div>
+    <div id="create-person-form"></div>
+
+    <!-- <script type="text/jsx" src="javascript/index.js"></script> -->
+    <style>
+      .red {
+        color: red;
+      }
+
+      .blue {
+        color: blue;
+      }
+
+      #create-person {
+        margin-top: 10px;
+      }
+
+      form {
+        margin-top: 10px;
+      }
+
+      .inactive {
+        display: none;
+      }
+      .form-input-group {
+        margin-bottom: 1em;
+      }
+    </style>
+    <script type="text/jsx">
+      var Person = React.createClass({
+        propTypes: {
+          onDelete: React.PropTypes.func
+        },
+        getInitialState: function(){
+          return {isInactive: false}
+        },
+
+        deleteUrl: function(){
+          return 'http://localhost:8000/persons/' + this.props.id
+        },
+
+        deletePerson: function(){
+          var self = this;
+
+          $.ajax({
+            type: 'DELETE',
+            url: this.deleteUrl(),
+            success: function(data){
+              this.props.onDelete()
+            }.bind(this)
+          });
+        },
+
+        render: function() {
+          var cs = React.addons.classSet,
+              classes = cs({
+                'inactive': this.state.isInactive
+              });
+
+          return (
+            <div className={classes} data-id={this.props.id}>
+              <h3>{this.props.name}</h3>
+              <p>{this.props.notes}</p>
+              <button onClick={this.deletePerson}>Delete</button>
+            </div>
+          )
+        }
+      });
+
+      var PersonList = React.createClass({
+        getInitialState: function(){
+          return {
+            data: []
+          }
+        },
+        loadDataFromServer: function(){
+          $.ajax({
+            url: this.props.url,
+            dataType: 'json',
+            success: function(data){
+              this.setState({data: data.Response});
+            }.bind(this),
+            error: function(xhr, status, err){
+              console.error(this.props.url, status, err.toString());
+            }
+          })
+        },
+
+        componentWillMount: function(){
+          this.loadDataFromServer();
+        },
+
+        countPeople: function(){
+          return this.state.data.length;
+        },
+
+        render: function(){
+          var self = this;
+
+          var people = this.state.data.map(function(person){
+            return (
+              <Person
+                name={person.Name}
+                notes={person.Notes}
+                key={person.Id}
+                id={person.Id}
+                onDelete={self.componentWillMount.bind(self)}>
+              </Person>
+            )
+          });
+          return (
+            <div className="person-list">
+              <p>Number of people: {this.countPeople()}</p>
+              {people}
+              <CreateForm url="http://localhost:8000/persons" onAdd={this.componentWillMount.bind(this)}></CreateForm>
+            </div>
+          )
+        }
+      });
+
+      var CreateForm = React.createClass({
+        getInitialState: function(){
+          return {userInput: '', data: [], group_id: 0}
+        },
+
+        resetForm: function(){
+          this.setState({userInput: '', group_id: 1})
+        },
+
+        handleSubmit: function(e){
+          e.preventDefault();
+          var self = this;
+          var form_data = {name: this.state.userInput, group_id: this.state.group_id};
+
+          $.ajax({
+            type: 'POST',
+            url: this.props.url,
+            data: form_data,
+            success: function(data){
+              this.props.onAdd();
+              this.resetForm();
+            }.bind(this)
+          });
+        },
+
+        fetchUrl: 'http://localhost:8000/groups',
+
+        fetchDataFromServer: function(){
+          $.ajax({
+            type: 'GET',
+            dataType: 'json',
+            url: this.fetchUrl,
+            success: function(data){
+              this.setState({data: data.Response})
+            }.bind(this)
+          })
+        },
+
+        handleInputChange: function(e){
+          this.setState({userInput: e.target.value})
+        },
+
+        handleSelectChange: function(e){
+          this.setState({group_id: e.target.value})
+        },
+
+        // NOTE: naming this differently from PersonList#componentDidMount not for any particular reason,
+        // but because this #componentDidMount implementation is overridden by the parent and fetchs from
+        // /persons instead of /groups, for some reason.
+        // 
+        componentDidMount: function(){
+          this.fetchDataFromServer();
+        },
+
+        render: function(){
+
+          var options = this.state.data.map(function(group){
+            return (
+              <option key={group.Id} value={group.Id}>{group.Name}</option>
+            )
+          })
+
+          return (
+            <form ref='form' onSubmit={this.handleSubmit}>
+              <div className='form-input-group'>
+                <label>Add Name</label>
+                <input
+                  type='text'
+                  name='name'
+                  value={this.state.userInput}
+                  onChange={this.handleInputChange}/>
+              </div>
+              <div className='form-input-group'>
+                <label>Group</label>
+                <select name='group_id' value={this.state.group_id} onChange={this.handleSelectChange}>
+                  {options}
+                </select>           
+              </div>
+              <button type='submit'>Create</button>
+            </form>
+          )
+        }
+      });
+
+      // TODO: Move data fetching methods to mixin
+      // 
+      // var FetchDataMixin = {
+      //   componentDidMount: function(){
+      //     this.fetchDataFromServer();
+      //   },
+      // };
+
+      React.render(
+        <PersonList url="http://localhost:8000/persons" pollInterval={10000}></PersonList>,
+        document.getElementById('example')
+      );
+    </script>
+  </body>
+</html>
